@@ -3,22 +3,19 @@ package com.abnamro.coesd.spring;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.config.spi.Converter;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
+import javax.enterprise.inject.Instance;
+import javax.inject.Provider;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.util.Optional;
 
 public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallback {
-
-    private static int AUTOWIRE_MODE = AutowireCapableBeanFactory.AUTOWIRE_BY_NAME;
-
-    private static String ERROR_ENTITY_VALUE_NOT_SAME = "@DataAccess(entity) value should have same type with injected generic type.";
-    private static String WARN_NON_GENERIC_VALUE = "@DataAccess annotation assigned to raw (non-generic) declaration. This will make your code less type-safe.";
-    private static String ERROR_CREATE_INSTANCE = "Cannot create instance of type '{}' or instance creation is failed because: {}";
 
     private ConfigurableListableBeanFactory configurableBeanFactory;
     private Object bean;
@@ -34,22 +31,38 @@ public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallbac
             return;
         }
         ReflectionUtils.makeAccessible(field);
-        Type fieldGenericType = field.getGenericType();
-        // In this example, get actual "GenericDAO' type.
+//        Type fieldGenericType = field.getGenericType();
         Class<?> generic = field.getType();
-        String name = field.getDeclaredAnnotation(ConfigProperty.class).name();
+        ConfigProperty cf = field.getDeclaredAnnotation(ConfigProperty.class);
+        String name = cf.name();
 
         if (StringUtils.isEmpty(name)) {
             name = field.toString().substring(field.toString().lastIndexOf(" ") + 1);
         }
+        final String name2 = name;
+
         if (generic.isAssignableFrom(String.class)) {
             Config config = ConfigProvider.getConfig();
-            field.set(bean, config.getValue(name, String.class));
+            field.set(bean, config.getOptionalValue(name, String.class)
+                    .orElse(cf.defaultValue()));
+        }
+        if (generic.isAssignableFrom(long.class) || generic.isAssignableFrom(Long.class)) {
+            Config config = ConfigProvider.getConfig();
+            field.set(bean, config.getOptionalValue(name, Long.class)
+                    .orElse(Long.getLong(cf.defaultValue())));
         }
         if (generic.isAssignableFrom(Optional.class)) {
             Config config = ConfigProvider.getConfig();
             field.set(bean, config.getOptionalValue(name, String.class));
+            //defaultValue is not honoured
         }
+        if (generic.isAssignableFrom(Provider.class)) {
+            Config config = ConfigProvider.getConfig();
+            field.set(bean, (Provider) () -> config.getOptionalValue(name2, String.class)
+                        .orElse(cf.defaultValue())
+                );
+        }
+
 
 
 //        if (genericTypeIsValid(classValue, fieldGenericType)) {
@@ -59,6 +72,10 @@ public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallbac
 //        } else {
 //            throw new IllegalArgumentException(ERROR_ENTITY_VALUE_NOT_SAME);
 //        }
+    }
+
+    <T> Converter<T> resolveConverter(Class<T> clazz) {
+        return null;
     }
 
 //    public boolean genericTypeIsValid(Class<?> clazz, Type field) {
