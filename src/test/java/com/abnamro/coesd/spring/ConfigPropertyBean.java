@@ -2,7 +2,7 @@ package com.abnamro.coesd.spring;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-public class TestBean {
+public class ConfigPropertyBean {
 
     @ConfigProperty(name = "greeting")
     private String greeting;

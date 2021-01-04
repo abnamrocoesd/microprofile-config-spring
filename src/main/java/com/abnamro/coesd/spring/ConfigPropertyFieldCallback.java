@@ -1,19 +1,22 @@
 package com.abnamro.coesd.spring;
 
+import com.google.common.base.MoreObjects;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.ConfigValue;
+import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.Converter;
-import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.core.ResolvableType;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
-import javax.enterprise.inject.Instance;
+import javax.enterprise.util.AnnotationLiteral;
 import javax.inject.Provider;
 import java.lang.reflect.Field;
-import java.lang.reflect.Type;
-import java.util.Optional;
+import java.util.*;
+import java.util.function.Supplier;
 
 public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallback {
 
@@ -27,92 +30,142 @@ public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallbac
 
     @Override
     public void doWith(Field field) throws IllegalArgumentException, IllegalAccessException {
-        if (!field.isAnnotationPresent(ConfigProperty.class)) {
+
+        String prefix = "";
+        if (bean.getClass().isAnnotationPresent(ConfigProperties.class)){
+            prefix = bean.getClass().getAnnotation(ConfigProperties.class).prefix() + ".";
+        } else if (!field.isAnnotationPresent(ConfigProperty.class)) {
             return;
         }
+
         ReflectionUtils.makeAccessible(field);
-//        Type fieldGenericType = field.getGenericType();
-        Class<?> generic = field.getType();
-        ConfigProperty cf = field.getDeclaredAnnotation(ConfigProperty.class);
+
+        Class<?> clazz = field.getType();
+        final ConfigProperty cf = MoreObjects.firstNonNull(field.getDeclaredAnnotation(ConfigProperty.class),
+            new ConfigPropertyLiteral() {
+                @Override
+                public String name() {
+                    return null;
+                }
+
+                @Override
+                public String defaultValue() {
+                    return null;
+                }
+            });
+
         String name = cf.name();
 
         if (StringUtils.isEmpty(name)) {
-            name = field.toString().substring(field.toString().lastIndexOf(" ") + 1);
+            if (prefix == null) {
+                name = field.toString().substring(field.toString().lastIndexOf(" ") + 1);
+            } else {
+                name = field.getName();
+            }
         }
-        final String name2 = name;
+        final String name2 = prefix + name;
 
-        if (generic.isAssignableFrom(String.class)) {
-            Config config = ConfigProvider.getConfig();
-            field.set(bean, config.getOptionalValue(name, String.class)
-                    .orElse(cf.defaultValue()));
-        }
-        if (generic.isAssignableFrom(long.class) || generic.isAssignableFrom(Long.class)) {
-            Config config = ConfigProvider.getConfig();
-            field.set(bean, config.getOptionalValue(name, Long.class)
-                    .orElse(Long.getLong(cf.defaultValue())));
-        }
-        if (generic.isAssignableFrom(Optional.class)) {
-            Config config = ConfigProvider.getConfig();
-            field.set(bean, config.getOptionalValue(name, String.class));
-            //defaultValue is not honoured
-        }
-        if (generic.isAssignableFrom(Provider.class)) {
-            Config config = ConfigProvider.getConfig();
-            field.set(bean, (Provider) () -> config.getOptionalValue(name2, String.class)
-                        .orElse(cf.defaultValue())
-                );
+        Config config = ConfigProvider.getConfig();
+
+        if (clazz.isAssignableFrom(Optional.class)) {
+            ResolvableType resolvableType = ResolvableType.forField(field);
+            ResolvableType generic = resolvableType.getGeneric(0);
+            Optional<?> mpValue = config.getOptionalValue(name, generic.toClass());
+            field.set(bean, mpValue);
+            return;
         }
 
+        if (clazz.isAssignableFrom(Supplier.class)) {
+            ResolvableType resolvableType = ResolvableType.forField(field);
+            ResolvableType generic = resolvableType.getGeneric(0);
+            Optional<?> mpValue = config.getOptionalValue(name, generic.toClass());
+            field.set(bean, (Supplier<Object>) () -> mpValue.get());
+            return;
+        }
+        if (clazz.isAssignableFrom(Provider.class)) {
+            ResolvableType resolvableType = ResolvableType.forField(field);
+            ResolvableType generic = resolvableType.getGeneric(0);
+            Optional<?> mpValue = config.getOptionalValue(name, generic.toClass());
+            field.set(bean, (Provider<Object>) () -> mpValue.get());
+            return;
+        }
 
+        if (clazz.isAssignableFrom(List.class)) {
+            ResolvableType resolvableType = ResolvableType.forField(field);
+            ResolvableType generic = resolvableType.getGeneric(0);
+            Optional<? extends List<?>> mpValue = config.getOptionalValues(name, generic.toClass());
+            if (mpValue.isPresent()){
+                field.set(bean, mpValue.get());
+            } else {
+                field.set(bean, Collections.EMPTY_LIST);
+            }
+            return;
+        }
+        if (clazz.isAssignableFrom(Set.class)) {
+            ResolvableType resolvableType = ResolvableType.forField(field);
+            ResolvableType generic = resolvableType.getGeneric(0);
+            Optional<? extends List<?>> mpValue = config.getOptionalValues(name, generic.toClass());
+            if (mpValue.isPresent()){
+                field.set(bean, new HashSet<>(mpValue.get()) );
+            } else {
+                field.set(bean, Collections.EMPTY_SET);
+            }
+            return;
+        }
 
-//        if (genericTypeIsValid(classValue, fieldGenericType)) {
-//            String beanName = classValue.getSimpleName() + generic.getSimpleName();
-//            Object beanInstance = getBeanInstance(beanName, generic, classValue);
-//            field.set(bean, beanInstance);
-//        } else {
-//            throw new IllegalArgumentException(ERROR_ENTITY_VALUE_NOT_SAME);
-//        }
+        if (clazz.isAssignableFrom(ConfigValue.class)) {
+            ConfigValue configValue = config.getConfigValue(name2);
+            if (configValue.getValue() == null) {
+                configValue = new ConfigValue(){
+                    @Override
+                    public String getName() {
+                        return name2;
+                    }
+
+                    @Override
+                    public String getValue() {
+                        return cf.defaultValue();
+                    }
+
+                    @Override
+                    public String getRawValue() {
+                        return null;
+                    }
+
+                    @Override
+                    public String getSourceName() {
+                        return null;
+                    }
+
+                    @Override
+                    public int getSourceOrdinal() {
+                        return 0;
+                    }
+                };
+            }
+            field.set(bean, configValue);
+            return;
+        }
+
+        Object value;
+        Optional<?> mpValue = config.getOptionalValue(name2, clazz);
+
+        if (mpValue.isPresent()) {
+            value = mpValue.get();
+        } else {
+            if (!cf.defaultValue().equals(ConfigProperty.UNCONFIGURED_VALUE)) {
+                Optional<? extends Converter<?>> converter = ConfigProvider.getConfig().getConverter(clazz);
+                value = converter.get().convert(cf.defaultValue());
+            } else {
+                throw new IllegalArgumentException("Could not resolve property '" + cf.name() + "'");
+            }
+        }
+
+        field.set(bean, value);
+        return;
     }
 
-    <T> Converter<T> resolveConverter(Class<T> clazz) {
-        return null;
-    }
+    public abstract class ConfigPropertyLiteral extends AnnotationLiteral<ConfigProperty> implements ConfigProperty {
 
-//    public boolean genericTypeIsValid(Class<?> clazz, Type field) {
-//        if (field instanceof ParameterizedType) {
-//            ParameterizedType parameterizedType = (ParameterizedType) field;
-//            Type type = parameterizedType.getActualTypeArguments()[0];
-//
-//            return type.equals(clazz);
-//        } else {
-//            logger.warn(WARN_NON_GENERIC_VALUE);
-//            return true;
-//        }
-//    }
-//
-//    public Object getBeanInstance(            String beanName, Class<?> genericClass, Class<?> paramClass) {
-//        Object daoInstance = null;
-//        if (!configurableBeanFactory.containsBean(beanName)) {
-//            logger.info("Creating new DataAccess bean named '{}'.", beanName);
-//
-//            Object toRegister = null;
-//            try {
-//                Constructor<?> ctr = genericClass.getConstructor(Class.class);
-//                toRegister = ctr.newInstance(paramClass);
-//            } catch (Exception e) {
-//                logger.error(ERROR_CREATE_INSTANCE, genericClass.getTypeName(), e);
-//                throw new RuntimeException(e);
-//            }
-//
-//            daoInstance = configurableBeanFactory.initializeBean(toRegister, beanName);
-//            configurableBeanFactory.autowireBeanProperties(daoInstance, AUTOWIRE_MODE, true);
-//            configurableBeanFactory.registerSingleton(beanName, daoInstance);
-//            logger.info("Bean named '{}' created successfully.", beanName);
-//        } else {
-//            daoInstance = configurableBeanFactory.getBean(beanName);
-//            logger.info(
-//                    "Bean named '{}' already exists used as current bean reference.", beanName);
-//        }
-//        return daoInstance;
-//    }
+    }
 }
