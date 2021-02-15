@@ -12,7 +12,7 @@ import javax.inject.Inject;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = {ConfigPropertiesBean.class})
-@ContextConfiguration(classes = {MPConfigConfiguration.class})
+@ContextConfiguration(classes = {MPConfigProducer.class})
 public class ConfigPropertiesTest {
 
     @Inject

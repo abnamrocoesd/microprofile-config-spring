@@ -19,7 +19,7 @@ import java.util.OptionalLong;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = ConfigPropertyBean.class)
-@ContextConfiguration(classes = {MPConfigConfiguration.class})
+@ContextConfiguration(classes = {MPConfigProducer.class})
 public class MPConfigProcessorTest {
 
     @Autowired
@@ -29,7 +29,10 @@ public class MPConfigProcessorTest {
     Config config;
 
     @ConfigProperty(name = "test")
-    private Optional<CustomObject> test;
+    private Optional<CustomObject> customOptional;
+
+    @ConfigProperty(name = "test")
+    private CustomObject custom;
 
 
     @ConfigProperty(name = "number")
@@ -54,6 +57,8 @@ public class MPConfigProcessorTest {
         Assertions.assertEquals("hallo", config.getValue("greeting", String.class));
         Assertions.assertEquals("env", config.getValue("before", String.class));
         Assertions.assertEquals(1L, test2.getAsLong());
+        Assertions.assertEquals("one", custom.getVal());
+        Assertions.assertEquals("one", customOptional.get().getVal());
     }
 
 }

@@ -12,7 +12,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = {ConfigPropertyBean.class})
-@ContextConfiguration(classes = {MPConfigConfiguration.class})
+@ContextConfiguration(classes = {MPConfigProducer.class})
 public class ConfigValueTest {
 
     @ConfigProperty(name = "tck.config.test.javaconfig.properties.key1")

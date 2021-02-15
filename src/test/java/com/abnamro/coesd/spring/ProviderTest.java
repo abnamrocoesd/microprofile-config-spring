@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = ConfigPropertyBean.class)
-@ContextConfiguration(classes = {MPConfigConfiguration.class})
+@ContextConfiguration(classes = {MPConfigProducer.class})
 public class ProviderTest {
 
     @Autowired

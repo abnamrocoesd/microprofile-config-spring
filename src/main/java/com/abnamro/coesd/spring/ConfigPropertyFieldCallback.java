@@ -15,6 +15,8 @@ import org.springframework.util.StringUtils;
 import javax.enterprise.util.AnnotationLiteral;
 import javax.inject.Provider;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -66,6 +68,13 @@ public class ConfigPropertyFieldCallback implements ReflectionUtils.FieldCallbac
         final String name2 = prefix + name;
 
         Config config = ConfigProvider.getConfig();
+
+//        Type type = ResolvableType.forField(field).getType();
+//        if(type instanceof Class && ConfigValue.class.isAssignableFrom((Class<?>) type)
+//            || type instanceof Class && OptionalInt.class.isAssignableFrom((Class<?>) type)
+//            || type instanceof ParameterizedType && (Optional.class.isAssignableFrom((Class<?>) ((ParameterizedType) type).getRawType()))) {
+//
+//        }
 
         if (clazz.isAssignableFrom(Optional.class)) {
             ResolvableType resolvableType = ResolvableType.forField(field);

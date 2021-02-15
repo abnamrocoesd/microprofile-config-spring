@@ -17,7 +17,7 @@ import java.util.Set;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = ConfigPropertyBean.class)
-@ContextConfiguration(classes = {MPConfigConfiguration.class})
+@ContextConfiguration(classes = {MPConfigProducer.class})
 public class ArrayTest {
 
     @Autowired
